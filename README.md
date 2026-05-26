@@ -40,7 +40,7 @@ You can also trigger runs on demand via the REST API.
                   ▼
       ┌───────────────────────┐
       │  AI Guard Middleware  │  ◄── ZS_DAS_API_KEY
-      │  DaS inspection       │      policy_id: 1407
+      │  DaS inspection       │      policy_id: <your policy id>
       │  DLP enforce · audit  │
       └───────────┬───────────┘
                   │
@@ -89,7 +89,7 @@ All four modules route through the AI Guard middleware before reaching Claude. T
 Pipeline → POST /v1/messages → AI Guard Middleware
                                       │
                                       ├─ 1. Fetch bearer token (ZS_DAS_API_KEY)
-                                      ├─ 2. POST to DaS endpoint (policy_id: 1407)
+                                      ├─ 2. POST to DaS endpoint (policy_id: 'your policy id')
                                       ├─ 3. Check action: ALLOW | BLOCK | DETECT
                                       ├─ 4. Write to audit log (JSONL)
                                       └─ 5. Forward to Anthropic (if ALLOW)
@@ -177,8 +177,8 @@ cp .env.middleware.example .env.middleware
 ```env
 ZSCALER_CLIENT_ID=your_zidentity_client_id
 ZSCALER_CLIENT_SECRET=your_zidentity_client_secret
-ZSCALER_VANITY_DOMAIN=your_vanity_domain        # e.g. tks
-ZSCALER_CLOUD=zscalertwo.net                    # your cloud suffix
+ZSCALER_VANITY_DOMAIN=your_vanity_domain        # e.g. Your vanity domain
+ZSCALER_CLOUD= <your zscaler cloud -e.g. zscaler.net>                   # your cloud suffix
 ANTHROPIC_API_KEY=sk-ant-...
 AI_GUARD_URL=http://ai-guard-middleware:8000
 OUTPUT_DIR=/app/reports
@@ -192,14 +192,14 @@ DSPM_MIN_SCORE=25
 - Log into your Zscaler admin portal
 - Navigate to **ZIdentity → Administration → API Clients**
 - Your `client_id` and `client_secret` are on the API client detail page
-- Your `vanity_domain` is the prefix of your ZIdentity login URL (e.g. `tks` from `tks.zslogin.net`)
+- Your `vanity_domain` is the prefix of your ZIdentity login URL (e.g. `vainity` from <vanity>.zslogin.net`)
 
 ### 3. Fill in `.env.middleware` (AI Guard credentials)
 
 ```env
 ZS_DAS_API_KEY=your_ai_guard_api_key
-ZS_DAS_URL=https://api.us1.zseclipse.net/v1/detection/execute-policy
-ZS_DAS_POLICY_ID=1407
+ZS_DAS_URL= <insert DAS URL e.g /api.us1.zseclipse.net/>
+ZS_DAS_POLICY_ID=<Your Policy ID
 ZS_DAS_TIMEOUT_SECONDS=10
 ANTHROPIC_API_KEY=sk-ant-...
 AI_GUARD_MODE=BLOCK
