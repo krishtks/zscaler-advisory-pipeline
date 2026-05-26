@@ -1,0 +1,65 @@
+services:
+
+  # ── AI Guard middleware ───────────────────────────────────────────────────
+  # Holds AI Guard client credentials. Pipeline posts here; this inspects
+  # via Zscaler DaS then forwards to Anthropic.
+  ai-guard-middleware:
+    build:
+      context: .
+      dockerfile: Dockerfile.middleware
+    container_name: ai-guard-middleware
+    restart: unless-stopped
+    env_file: .env.middleware       # AI_GUARD_CLIENT_ID/SECRET live here only
+    ports:
+      - "8000:8000"
+    volumes:
+      - ai_guard_logs:/app/logs
+    networks:
+      - pipeline-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Unified advisory pipeline ─────────────────────────────────────────────
+  # Holds ZIdentity + Anthropic credentials. AI Guard keys are NOT here.
+  advisory-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zscaler-advisory-pipeline
+    restart: unless-stopped
+    env_file: .env                  # ZIdentity + Anthropic keys live here
+    ports:
+      - "8080:8080"
+    volumes:
+      - reports:/app/reports
+    networks:
+      - pipeline-net
+    depends_on:
+      ai-guard-middleware:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+networks:
+  pipeline-net:
+    driver: bridge
+
+volumes:
+  reports:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./reports
+  ai_guard_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs

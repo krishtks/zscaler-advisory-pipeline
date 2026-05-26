@@ -1,0 +1,7 @@
+.env
+.env.middleware
+reports/
+reports-live/
+reports-output/
+logs/
+.DS_Store
