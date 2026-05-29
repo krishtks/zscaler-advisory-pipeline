@@ -18,7 +18,7 @@ AI_GUARD_URL  = os.getenv("AI_GUARD_URL", "")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 MODEL         = "claude-opus-4-6"
 OUTPUT_DIR    = Path(os.getenv("OUTPUT_DIR", "./reports"))
-CHUNK_SIZE    = 20
+CHUNK_SIZE    = 50
 
 WEIGHTS = {"base_score":0.30,"user_spread":0.25,"data_volume":0.20,
            "no_cert":0.08,"breach_history":0.12,"pii_capable":0.05}
@@ -131,6 +131,10 @@ def _call_llm(prompt:str) -> str:
     if AI_GUARD_URL:
         r = httpx.post(f"{AI_GUARD_URL}/v1/messages",
             json={"model":MODEL,"max_tokens":4096,"messages":[{"role":"user","content":prompt}]},timeout=120)
+        if r.status_code == 400:
+            detail = r.json().get("detail", {})
+            logger.warning(f"AI Guard blocked prompt: {detail.get('violation','unknown')}")
+            return f"[AI Guard blocked: {detail.get('violation','policy violation')}]"
         r.raise_for_status()
         return r.json()["content"][0]["text"]
     return Anthropic(api_key=ANTHROPIC_KEY).messages.create(
@@ -155,7 +159,9 @@ def analyse_apps_with_claude(scored_apps:list[dict]) -> list[dict]:
             f"Apps:\n{lines}"
         )
         try:
-            rmap={a["name"]:a for a in json.loads(_call_llm(prompt))}
+            raw=_call_llm(prompt).strip()
+            raw=raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            rmap={a["name"]:a for a in json.loads(raw)}
         except Exception as e:
             logger.warning(f"CASB chunk LLM error: {e}"); rmap={}
         for app in chunk:

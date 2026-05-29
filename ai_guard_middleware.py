@@ -60,29 +60,29 @@ def _audit(event: dict):
 def _inspect(messages: list[dict], model: str) -> dict:
     """
     Call Zscaler AI Guard DaS endpoint.
-    Returns dict with keys: action, violation, policy, raw_response
+    Correct payload: policyId + direction + content (plain string).
+    Matches the working format from guardrails.py in ai-security-demo.
     """
     if not ZS_DAS_API_KEY:
         raise RuntimeError("ZS_DAS_API_KEY not set in .env.middleware")
     if not ZS_DAS_POLICY_ID:
         raise RuntimeError("ZS_DAS_POLICY_ID not set in .env.middleware")
 
-    # Full DaS endpoint URL (includes path)
-    url = ZS_DAS_URL
+    # DaS expects plain text in "content", not a messages array
+    content_text = " ".join(
+        m.get("content", "") if isinstance(m.get("content"), str)
+        else str(m.get("content", ""))
+        for m in messages
+    ).strip()
 
     payload = {
         "policyId":  ZS_DAS_POLICY_ID,
-        "aiContent": {
-            "model":    model,
-            "messages": [
-                {"role": m["role"], "content": m["content"]}
-                for m in messages
-            ],
-        },
+        "direction": "IN",
+        "content":   content_text,
     }
 
     resp = httpx.post(
-        url,
+        ZS_DAS_URL,
         json=payload,
         headers={
             "Authorization": f"Bearer {ZS_DAS_API_KEY}",
@@ -93,13 +93,25 @@ def _inspect(messages: list[dict], model: str) -> dict:
     resp.raise_for_status()
     data = resp.json()
 
-    # Parse Zscaler DaS response — action is in data["action"] or data["result"]
-    action    = (data.get("action") or data.get("result") or "ALLOW").upper()
-    violation = data.get("violatedPolicy") or data.get("violation") or ""
-    policy    = data.get("policyName") or ZS_DAS_POLICY_ID
+    # Parse DaS response — action at top level: ALLOW | BLOCK | DETECT
+    action = data.get("action", "ALLOW").upper()
+
+    # Body-level 500 means all detectors failed — fail open
+    if data.get("statusCode") == 500:
+        action    = "ALLOW"
+        violation = data.get("errorMessage", "All detectors failed — failing open")
+    else:
+        detector_responses = data.get("detectorResponses", {})
+        triggered = [
+            name for name, d in detector_responses.items()
+            if d.get("triggered") or d.get("action", "ALLOW").upper() == "BLOCK"
+        ]
+        violation = f"Detectors triggered: {', '.join(triggered)}" if triggered else ""
+
+    policy = data.get("policyName") or ZS_DAS_POLICY_ID
 
     return {
-        "action":       action,      # ALLOW | BLOCK | DETECT
+        "action":       action,
         "violation":    violation,
         "policy":       policy,
         "raw_response": data,

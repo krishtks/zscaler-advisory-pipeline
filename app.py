@@ -21,7 +21,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse, HTMLResponse, HTMLResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -38,7 +39,7 @@ scheduler = AsyncIOScheduler()
 
 def _full_pipeline(dry_run: bool = False):
     """Complete pipeline: run modules → correlate → unified report."""
-    global _last_run
+    # _last_run updated in-place — no global reassignment needed
 
     run_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     slug   = datetime.now(timezone.utc).strftime("%Y%m%d")
@@ -61,13 +62,14 @@ def _full_pipeline(dry_run: bool = False):
         slug=slug,
     )
 
-    _last_run = {
+    _last_run.clear()
+    _last_run.update({
         "run_ts":       run_ts,
         "dry_run":      dry_run,
         "modules":      module_results,
         "correlation":  {"total": len(combined), "critical": posture_summary["combined_critical"]},
         "posture":      posture_summary,
-    }
+    })
     logger.info(f"Pipeline complete: {_last_run}")
 
 
@@ -86,6 +88,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Unified AI Advisory Pipeline — CASB + DSPM + ZIA + ZPA", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.post("/pipeline/run")
@@ -144,3 +152,38 @@ def health():
         "scheduler_running": scheduler.running,
         "last_run":         _last_run.get("run_ts", "never"),
     }
+
+
+@app.get("/ui", response_class=HTMLResponse)
+def dashboard():
+    """Serve the advisory pipeline dashboard."""
+    ui_path = Path(__file__).parent / "dashboard.html"
+    if not ui_path.exists():
+        raise HTTPException(404, "Dashboard not found")
+    return ui_path.read_text()
+
+
+@app.get("/reports/{filename}")
+def get_report(filename: str):
+    """Return raw content of a report file."""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    filepath = OUTPUT_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(404, f"Report {filename} not found")
+    return PlainTextResponse(filepath.read_text())
+
+
+@app.get("/ui", response_class=HTMLResponse)
+def dashboard():
+    ui_path = Path(__file__).parent / "dashboard.html"
+    if not ui_path.exists():
+        raise HTTPException(404, "Dashboard not found")
+    return ui_path.read_text()
+
+@app.get("/reports/{filename}")
+def get_report(filename: str):
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    filepath = OUTPUT_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(404, f"Report {filename} not found")
+    return PlainTextResponse(filepath.read_text())

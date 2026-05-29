@@ -142,9 +142,14 @@ def score_events(raw_events:list[dict]) -> list[dict]:
 
 def _call_llm(prompt:str) -> str:
     if AI_GUARD_URL:
-        r=httpx.post(f"{AI_GUARD_URL}/messages",
+        r=httpx.post(f"{AI_GUARD_URL}/v1/messages",
             json={"model":MODEL,"max_tokens":4096,"messages":[{"role":"user","content":prompt}]},timeout=120)
-        r.raise_for_status(); return r.json()["content"][0]["text"]
+        if r.status_code == 400:
+            detail = r.json().get("detail", {})
+            logger.warning(f"AI Guard blocked: {detail.get('violation','policy violation')}")
+            return "[]"
+        r.raise_for_status()
+        return r.json()["content"][0]["text"]
     return Anthropic(api_key=ANTHROPIC_KEY).messages.create(
         model=MODEL,max_tokens=4096,messages=[{"role":"user","content":prompt}]).content[0].text
 
@@ -165,7 +170,9 @@ def enrich_with_claude(scored:list[dict]) -> list[dict]:
             f"\"hunt_query\":\"single-line {fmt} query\"}}]\nEvents:\n{lines}"
         )
         try:
-            rmap={r["pattern"]:r for r in json.loads(_call_llm(prompt))}
+            raw=_call_llm(prompt).strip()
+            raw=raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            rmap={r["pattern"]:r for r in json.loads(raw)}
         except Exception as e:
             logger.warning(f"ZIA chunk LLM error: {e}"); rmap={}
         for e in chunk:

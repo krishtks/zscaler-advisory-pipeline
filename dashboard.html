@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zscaler Advisory Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #f0f4f8;
+    --bg2:      #ffffff;
+    --bg3:      #e8eef4;
+    --border:   #d0dce8;
+    --border2:  #b8ccd8;
+    --accent:   #0057b8;
+    --accent2:  #0070e0;
+    --critical: #c8001a;
+    --high:     #d45000;
+    --medium:   #b07800;
+    --low:      #007a50;
+    --text:     #0f1f2e;
+    --text2:    #3d5a72;
+    --text3:    #7a9bb0;
+    --shadow:   0 1px 3px rgba(0,40,80,0.08), 0 4px 16px rgba(0,40,80,0.06);
+    --shadow-sm:0 1px 2px rgba(0,40,80,0.06);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+    position: sticky; top:0; z-index:100;
+    box-shadow: var(--shadow-sm);
+  }
+  .header-inner {
+    max-width:1400px; margin:0 auto; padding:0 32px;
+    display:flex; align-items:center; justify-content:space-between;
+    height: 64px;
+  }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-icon {
+    width:36px; height:36px;
+    background: var(--accent);
+    border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Syne', sans-serif; font-weight:800;
+    font-size:18px; color:#fff; letter-spacing:-1px;
+  }
+  .logo-text .title {
+    font-family:'Syne', sans-serif; font-weight:800;
+    font-size:16px; color:var(--text); letter-spacing:-0.3px;
+  }
+  .logo-text .sub {
+    font-size:11px; color:var(--text3);
+    font-family:'DM Mono', monospace; letter-spacing:0.5px;
+  }
+  .header-right { display:flex; align-items:center; gap:16px; }
+  .run-ts {
+    font-family:'DM Mono', monospace; font-size:11px; color:var(--text3);
+  }
+  .status-pill {
+    display:flex; align-items:center; gap:6px;
+    padding: 5px 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius:20px;
+    font-family:'DM Mono', monospace; font-size:11px; color:var(--text2);
+  }
+  .status-dot {
+    width:7px; height:7px; border-radius:50%;
+    background: var(--low);
+    animation: pulse 2.5s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  .btn-run {
+    padding: 8px 20px;
+    background: var(--accent);
+    border: none; border-radius:6px;
+    color: #fff;
+    font-family:'DM Sans', sans-serif;
+    font-weight:600; font-size:13px;
+    cursor:pointer; transition: all 0.15s;
+    display:flex; align-items:center; gap:6px;
+  }
+  .btn-run:hover { background: var(--accent2); box-shadow: 0 4px 12px rgba(0,87,184,0.3); transform:translateY(-1px); }
+  .btn-run:active { transform:translateY(0); }
+  .btn-run:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+
+  /* Page wrap */
+  .wrap { max-width:1400px; margin:0 auto; padding:32px; }
+
+  /* Summary cards */
+  .summary-row {
+    display:grid; grid-template-columns:repeat(4,1fr); gap:16px;
+    margin-bottom:28px;
+  }
+  .summary-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius:12px;
+    padding: 22px 24px;
+    box-shadow: var(--shadow-sm);
+    position:relative; overflow:hidden;
+    transition: box-shadow 0.2s;
+  }
+  .summary-card:hover { box-shadow: var(--shadow); }
+  .summary-card::after {
+    content:'';
+    position:absolute; bottom:0; left:0; right:0; height:3px;
+    border-radius:0 0 12px 12px;
+  }
+  .summary-card.critical::after { background:var(--critical); }
+  .summary-card.high::after { background:var(--high); }
+  .summary-card.medium::after { background:var(--medium); }
+  .summary-card.low::after { background:var(--low); }
+
+  .summary-card .sev-label {
+    font-size:11px; font-weight:600; letter-spacing:1px;
+    text-transform:uppercase; margin-bottom:10px;
+  }
+  .summary-card.critical .sev-label { color:var(--critical); }
+  .summary-card.high .sev-label { color:var(--high); }
+  .summary-card.medium .sev-label { color:var(--medium); }
+  .summary-card.low .sev-label { color:var(--low); }
+
+  .summary-card .count {
+    font-family:'Syne', sans-serif; font-weight:800;
+    font-size:44px; line-height:1; letter-spacing:-2px;
+    color:var(--text);
+  }
+  .summary-card .sub-text { font-size:12px; color:var(--text3); margin-top:6px; }
+
+  /* Section label */
+  .section-label {
+    font-size:11px; font-weight:600; letter-spacing:1.5px;
+    text-transform:uppercase; color:var(--text3);
+    margin-bottom:14px;
+  }
+
+  /* Grid layout */
+  .main-grid {
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;
+    margin-bottom:16px;
+  }
+  .full-width { grid-column:1/-1; }
+
+  /* Card */
+  .card {
+    background:var(--bg2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    box-shadow:var(--shadow-sm);
+    overflow:hidden;
+  }
+  .card-header {
+    padding:16px 22px;
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--bg2);
+  }
+  .card-title {
+    font-size:13px; font-weight:600; color:var(--text);
+    letter-spacing:0.2px;
+  }
+  .card-badge {
+    font-family:'DM Mono', monospace;
+    font-size:10px; padding:3px 10px;
+    background:var(--bg3); border:1px solid var(--border);
+    border-radius:20px; color:var(--text3);
+  }
+  .card-body { padding:22px; }
+
+  /* Exec summary */
+  .exec-panel {
+    background:linear-gradient(135deg, #eef5ff, #f8fbff);
+    border:1px solid #c5d9f0;
+    border-radius:8px; padding:18px 22px;
+    border-left:4px solid var(--accent);
+  }
+  .exec-label {
+    font-size:10px; font-weight:600; letter-spacing:1.5px;
+    text-transform:uppercase; color:var(--accent); margin-bottom:8px;
+  }
+  .exec-text { font-size:14px; color:var(--text2); line-height:1.65; }
+
+  /* Module cards */
+  .module-card {
+    background:var(--bg2); border:1px solid var(--border);
+    border-radius:12px; padding:22px;
+    box-shadow:var(--shadow-sm);
+    transition:box-shadow 0.2s, transform 0.2s;
+  }
+  .module-card:hover { box-shadow:var(--shadow); transform:translateY(-2px); }
+  .mod-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:18px; }
+  .mod-name {
+    font-family:'Syne', sans-serif; font-weight:800;
+    font-size:26px; color:var(--accent); letter-spacing:-0.5px;
+  }
+  .mod-sub { font-size:11px; color:var(--text3); margin-top:2px; }
+  .mod-total {
+    text-align:right;
+  }
+  .mod-total .total-num {
+    font-family:'Syne', sans-serif; font-weight:800;
+    font-size:22px; color:var(--text);
+  }
+  .mod-total .total-label { font-size:10px; color:var(--text3); }
+
+  .mod-bars { display:flex; flex-direction:column; gap:8px; }
+  .mod-bar-row { display:flex; align-items:center; gap:10px; }
+  .mod-bar-label {
+    font-family:'DM Mono', monospace; font-size:10px;
+    width:28px; text-align:right; font-weight:500;
+  }
+  .mod-bar-label.critical { color:var(--critical); }
+  .mod-bar-label.high { color:var(--high); }
+  .mod-bar-label.medium { color:var(--medium); }
+  .mod-bar-label.low { color:var(--low); }
+  .mod-bar-track {
+    flex:1; height:8px;
+    background:var(--bg3); border-radius:4px; overflow:hidden;
+  }
+  .mod-bar-fill { height:100%; border-radius:4px; transition:width 1.2s cubic-bezier(0.4,0,0.2,1); }
+  .mod-bar-fill.critical { background:var(--critical); }
+  .mod-bar-fill.high { background:var(--high); }
+  .mod-bar-fill.medium { background:var(--medium); }
+  .mod-bar-fill.low { background:var(--low); opacity:0.7; }
+  .mod-bar-count {
+    font-family:'DM Mono', monospace; font-size:10px;
+    width:30px; color:var(--text3); text-align:right;
+  }
+  .mod-status {
+    display:inline-flex; align-items:center; gap:5px;
+    margin-top:14px; padding:4px 10px;
+    border-radius:20px; font-size:11px; font-weight:500;
+  }
+  .mod-status.ok { background:#edfaf4; color:var(--low); }
+  .mod-status.error { background:#fff0f0; color:var(--critical); }
+  .mod-status-dot { width:5px; height:5px; border-radius:50%; }
+  .mod-status.ok .mod-status-dot { background:var(--low); }
+  .mod-status.error .mod-status-dot { background:var(--critical); }
+
+  /* Reports table */
+  .reports-table { width:100%; border-collapse:collapse; }
+  .reports-table th {
+    font-size:11px; font-weight:600; letter-spacing:0.8px;
+    text-transform:uppercase; color:var(--text3);
+    padding:10px 16px; text-align:left;
+    background:var(--bg3); border-bottom:1px solid var(--border);
+  }
+  .reports-table td {
+    padding:11px 16px; font-size:13px;
+    border-bottom:1px solid var(--bg3);
+    vertical-align:middle;
+  }
+  .reports-table tr:last-child td { border-bottom:none; }
+  .reports-table tr:hover td { background:var(--bg3); }
+  .report-name {
+    font-family:'DM Mono', monospace; font-size:12px; color:var(--accent);
+  }
+  .report-tag {
+    font-size:10px; font-weight:600; padding:2px 8px;
+    border-radius:4px; letter-spacing:0.5px;
+  }
+  .tag-posture { background:#dbeeff; color:var(--accent); }
+  .tag-casb { background:#fff3e0; color:#c06000; }
+  .tag-zia { background:#fce8e8; color:var(--critical); }
+  .tag-zpa { background:#e8f5e9; color:var(--low); }
+  .tag-dspm { background:#f3e8ff; color:#7000c0; }
+  .report-size { font-family:'DM Mono', monospace; font-size:11px; color:var(--text3); }
+  .btn-view {
+    padding:5px 14px; border-radius:6px;
+    background:var(--bg3); border:1px solid var(--border);
+    color:var(--text2); font-size:11px; font-weight:600;
+    cursor:pointer; transition:all 0.15s;
+  }
+  .btn-view:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+  /* Report viewer */
+  .report-viewer {
+    display:none; position:fixed;
+    top:0; left:0; right:0; bottom:0;
+    background:rgba(15,31,46,0.5);
+    backdrop-filter:blur(4px);
+    z-index:1000;
+  }
+  .report-viewer.open { display:flex; align-items:flex-start; justify-content:center; padding:40px 20px; }
+  .viewer-panel {
+    background:var(--bg2); border-radius:14px;
+    box-shadow:0 24px 64px rgba(0,40,80,0.18);
+    width:100%; max-width:860px; max-height:85vh;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .viewer-header {
+    padding:18px 24px;
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+    flex-shrink:0;
+  }
+  .viewer-title { font-family:'DM Mono', monospace; font-size:13px; color:var(--accent); font-weight:500; }
+  .btn-close {
+    padding:6px 16px; border-radius:6px;
+    background:var(--bg3); border:1px solid var(--border);
+    color:var(--text2); font-size:12px; font-weight:600;
+    cursor:pointer; transition:all 0.15s;
+  }
+  .btn-close:hover { background:#fce8e8; border-color:var(--critical); color:var(--critical); }
+  .viewer-body {
+    padding:32px; overflow-y:auto;
+    font-family:'DM Sans', sans-serif; line-height:1.7; color:var(--text2);
+  }
+  .viewer-body h1 { font-family:'Syne'; font-weight:800; font-size:24px; color:var(--text); margin-bottom:10px; }
+  .viewer-body h2 { font-family:'Syne'; font-weight:700; font-size:17px; color:var(--text); margin:24px 0 8px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+  .viewer-body h3 { font-size:14px; font-weight:600; color:var(--text2); margin:16px 0 6px; }
+  .viewer-body p { margin-bottom:10px; font-size:14px; }
+  .viewer-body strong { color:var(--text); font-weight:600; }
+  .viewer-body em { color:var(--text3); font-style:normal; font-size:12px; font-family:'DM Mono'; }
+  .viewer-body hr { border:none; border-top:1px solid var(--border); margin:20px 0; }
+  .viewer-body ul { padding-left:20px; font-size:14px; }
+  .viewer-body li { margin-bottom:5px; }
+  .viewer-body code { font-family:'DM Mono'; font-size:12px; background:var(--bg3); padding:2px 6px; border-radius:3px; color:var(--accent); }
+
+  /* Loading */
+  .loading {
+    display:flex; align-items:center; justify-content:center;
+    padding:60px; flex-direction:column; gap:14px;
+  }
+  .loading-spinner {
+    width:28px; height:28px;
+    border:2px solid var(--border);
+    border-top-color:var(--accent);
+    border-radius:50%;
+    animation:spin 0.7s linear infinite;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .loading-text { font-size:12px; color:var(--text3); }
+
+  /* Toast */
+  .toast {
+    position:fixed; bottom:24px; right:24px;
+    background:var(--accent); color:#fff;
+    padding:12px 20px; border-radius:8px;
+    font-size:13px; font-weight:500;
+    box-shadow:0 8px 24px rgba(0,87,184,0.3);
+    transform:translateY(80px); opacity:0;
+    transition:all 0.3s cubic-bezier(0.4,0,0.2,1);
+    z-index:9000;
+  }
+  .toast.show { transform:translateY(0); opacity:1; }
+
+  @media(max-width:960px) {
+    .main-grid { grid-template-columns:1fr 1fr; }
+    .summary-row { grid-template-columns:1fr 1fr; }
+  }
+  @media(max-width:600px) {
+    .main-grid { grid-template-columns:1fr; }
+    .summary-row { grid-template-columns:1fr 1fr; }
+    .wrap { padding:16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">Z</div>
+      <div class="logo-text">
+        <div class="title">Advisory Pipeline</div>
+        <div class="sub">Unified Security Posture</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="run-ts" id="runTs">—</div>
+      <div class="status-pill">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Loading</span>
+      </div>
+      <button class="btn-run" id="btnRun" onclick="triggerRun()">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 2l7 4-7 4V2z" fill="currentColor"/></svg>
+        Run Pipeline
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- Summary -->
+  <div class="summary-row">
+    <div class="summary-card critical">
+      <div class="sev-label">Critical</div>
+      <div class="count" id="sumCritical">—</div>
+      <div class="sub-text" id="sumCriticalSub">findings</div>
+    </div>
+    <div class="summary-card high">
+      <div class="sev-label">High</div>
+      <div class="count" id="sumHigh">—</div>
+      <div class="sub-text">findings</div>
+    </div>
+    <div class="summary-card medium">
+      <div class="sev-label">Medium</div>
+      <div class="count" id="sumMedium">—</div>
+      <div class="sub-text">findings</div>
+    </div>
+    <div class="summary-card low">
+      <div class="sev-label">Low</div>
+      <div class="count" id="sumLow">—</div>
+      <div class="sub-text">findings</div>
+    </div>
+  </div>
+
+  <!-- Exec summary -->
+  <div class="card full-width" id="execCard" style="display:none; margin-bottom:16px;">
+    <div class="card-header">
+      <div class="card-title">Executive Summary</div>
+      <div class="card-badge" id="execModules"></div>
+    </div>
+    <div class="card-body">
+      <div class="exec-panel">
+        <div class="exec-label">Posture Assessment</div>
+        <div class="exec-text" id="execText"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Module grid -->
+  <div class="section-label">Modules</div>
+  <div class="main-grid" id="moduleGrid"></div>
+
+  <!-- Reports -->
+  <div class="section-label" style="margin-top:12px;">Reports</div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Generated Reports</div>
+      <div class="card-badge" id="reportCount">—</div>
+    </div>
+    <div id="reportsBody">
+      <div class="loading"><div class="loading-spinner"></div><div class="loading-text">Loading reports...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Report viewer -->
+<div class="report-viewer" id="reportViewer" onclick="closeViewerOutside(event)">
+  <div class="viewer-panel">
+    <div class="viewer-header">
+      <div class="viewer-title" id="viewerTitle"></div>
+      <button class="btn-close" onclick="closeViewer()">✕ Close</button>
+    </div>
+    <div class="viewer-body" id="viewerBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+
+function showToast(msg, duration=3500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+async function loadPosture() {
+  try {
+    const r = await fetch(API + '/posture/latest');
+    if (!r.ok) throw new Error('No data');
+    const d = await r.json();
+
+    document.getElementById('runTs').textContent = 'Last run: ' + (d.run_ts || '—');
+
+    const mods = d.module_summaries || {};
+    let totals = {critical:0, high:0, medium:0, low:0, total:0};
+    Object.values(mods).forEach(m => {
+      if (m.status !== 'ok') return;
+      totals.critical += m.critical||0;
+      totals.high     += m.high||0;
+      totals.medium   += m.medium||0;
+      totals.low      += m.low||0;
+      totals.total    += m.total||0;
+    });
+
+    document.getElementById('sumCritical').textContent = totals.critical;
+    document.getElementById('sumHigh').textContent     = totals.high;
+    document.getElementById('sumMedium').textContent   = totals.medium;
+    document.getElementById('sumLow').textContent      = totals.low;
+    document.getElementById('sumCriticalSub').textContent = `of ${totals.total} total`;
+
+    // Status
+    const statusEl = document.getElementById('statusText');
+    const dotEl    = document.getElementById('statusDot');
+    if (totals.critical > 0) {
+      statusEl.textContent = 'Critical';
+      dotEl.style.background = 'var(--critical)';
+    } else if (totals.high > 0) {
+      statusEl.textContent = 'High Risk';
+      dotEl.style.background = 'var(--high)';
+    } else {
+      statusEl.textContent = 'Nominal';
+      dotEl.style.background = 'var(--low)';
+    }
+
+    // Exec
+    const execCard = document.getElementById('execCard');
+    execCard.style.display = 'block';
+    document.getElementById('execModules').textContent =
+      Object.keys(mods).map(k=>k.toUpperCase()).join(' · ');
+    document.getElementById('execText').textContent =
+      totals.critical > 0
+        ? `⚠ ${totals.critical} critical findings require immediate attention across ${Object.keys(mods).length} modules.`
+        : totals.high > 0
+        ? `${totals.high} high-severity findings identified. No critical cross-pillar exposures detected this cycle.`
+        : `Security posture nominal. ${totals.total} findings catalogued across ${Object.keys(mods).length} modules — no critical or high severity issues requiring immediate action.`;
+
+    // Modules
+    const grid = document.getElementById('moduleGrid');
+    grid.innerHTML = '';
+    const labels = {zia:'ZIA', casb:'CASB', zpa:'ZPA', dspm:'DSPM'};
+    const subs   = {zia:'Threat Telemetry', casb:'Shadow IT & App Risk', zpa:'Access Posture', dspm:'Data Exposure'};
+
+    Object.entries(mods).forEach(([key, m]) => {
+      const isOk = m.status === 'ok';
+      const bars = ['critical','high','medium','low'].map(sev => {
+        const val = m[sev]||0;
+        const pct = isOk && m.total > 0 ? Math.max((val/m.total)*100, val>0?3:0) : 0;
+        return `<div class="mod-bar-row">
+          <div class="mod-bar-label ${sev}">${val}</div>
+          <div class="mod-bar-track"><div class="mod-bar-fill ${sev}" style="width:${pct}%"></div></div>
+          <div class="mod-bar-count">${sev.slice(0,3).toUpperCase()}</div>
+        </div>`;
+      }).join('');
+
+      const status = isOk
+        ? `<div class="mod-status ok"><div class="mod-status-dot"></div>OK · ${m.total} findings</div>`
+        : `<div class="mod-status error"><div class="mod-status-dot"></div>Not configured</div>`;
+
+      grid.innerHTML += `<div class="module-card">
+        <div class="mod-header">
+          <div>
+            <div class="mod-name">${labels[key]||key.toUpperCase()}</div>
+            <div class="mod-sub">${subs[key]||''}</div>
+          </div>
+          ${isOk ? `<div class="mod-total"><div class="total-num">${m.total}</div><div class="total-label">total</div></div>` : ''}
+        </div>
+        ${isOk ? `<div class="mod-bars">${bars}</div>` : ''}
+        ${status}
+      </div>`;
+    });
+
+  } catch(e) {
+    document.getElementById('statusText').textContent = 'No data';
+    console.error(e);
+  }
+}
+
+async function loadReports() {
+  const body = document.getElementById('reportsBody');
+  try {
+    const r = await fetch(API + '/reports');
+    const reports = await r.json();
+    document.getElementById('reportCount').textContent = `${reports.length} files`;
+
+    if (!reports.length) {
+      body.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text3);font-size:13px;">No reports found</div>';
+      return;
+    }
+
+    function tagClass(f) {
+      if (f.includes('posture')) return 'tag-posture';
+      if (f.includes('casb'))   return 'tag-casb';
+      if (f.includes('zia'))    return 'tag-zia';
+      if (f.includes('zpa'))    return 'tag-zpa';
+      if (f.includes('dspm'))   return 'tag-dspm';
+      return 'tag-posture';
+    }
+    function tagLabel(f) {
+      if (f.includes('posture')) return 'POSTURE';
+      if (f.includes('casb'))   return 'CASB';
+      if (f.includes('zia'))    return 'ZIA';
+      if (f.includes('zpa'))    return 'ZPA';
+      if (f.includes('dspm'))   return 'DSPM';
+      return 'REPORT';
+    }
+
+    const rows = reports.map(f => `<tr>
+      <td><span class="report-name">${f.filename}</span></td>
+      <td><span class="report-tag ${tagClass(f.filename)}">${tagLabel(f.filename)}</span></td>
+      <td><span class="report-size">${f.size_kb} KB</span></td>
+      <td style="text-align:right"><button class="btn-view" onclick="viewReport('${f.filename}')">View →</button></td>
+    </tr>`).join('');
+
+    body.innerHTML = `<table class="reports-table">
+      <thead><tr><th>Filename</th><th>Type</th><th>Size</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  } catch(e) {
+    body.innerHTML = `<div style="padding:24px;color:var(--critical);font-size:13px;">Error loading reports: ${e.message}</div>`;
+  }
+}
+
+async function viewReport(filename) {
+  const viewer = document.getElementById('reportViewer');
+  document.getElementById('viewerTitle').textContent = filename;
+  document.getElementById('viewerBody').innerHTML =
+    '<div class="loading"><div class="loading-spinner"></div><div class="loading-text">Loading...</div></div>';
+  viewer.classList.add('open');
+  try {
+    const r = await fetch(API + '/reports/' + filename);
+    const text = await r.text();
+    document.getElementById('viewerBody').innerHTML = renderMarkdown(text);
+  } catch(e) {
+    document.getElementById('viewerBody').innerHTML =
+      `<div style="color:var(--critical);font-size:13px;">Failed to load: ${e.message}</div>`;
+  }
+}
+
+function closeViewer() { document.getElementById('reportViewer').classList.remove('open'); }
+function closeViewerOutside(e) { if (e.target === document.getElementById('reportViewer')) closeViewer(); }
+
+function renderMarkdown(md) {
+  return md
+    .replace(/^# (.+)$/mg, '<h1>$1</h1>')
+    .replace(/^## (.+)$/mg, '<h2>$1</h2>')
+    .replace(/^### (.+)$/mg, '<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/_([^_]+)_/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^---$/mg, '<hr>')
+    .replace(/^\- (.+)$/mg, '<li>$1</li>')
+    .replace(/(<li>[^<]*<\/li>\n?)+/g, s => `<ul>${s}</ul>`)
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(?!<[hulipcb])(.+)$/mg, '<p>$1</p>')
+    .replace(/<p><\/p>/g,'');
+}
+
+async function triggerRun() {
+  const btn = document.getElementById('btnRun');
+  btn.disabled = true; btn.textContent = '⟳ Running...';
+  showToast('Pipeline started — this will take several minutes');
+  try {
+    await fetch(API + '/pipeline/run', {method:'POST'});
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 2l7 4-7 4V2z" fill="currentColor"/></svg> Run Pipeline';
+      loadPosture(); loadReports();
+    }, 5000);
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = 'Run Pipeline';
+    showToast('Error: Could not start pipeline');
+  }
+}
+
+async function refresh() { await loadPosture(); await loadReports(); }
+refresh();
+setInterval(refresh, 60000);
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeViewer(); });
+</script>
+</body>
+</html>

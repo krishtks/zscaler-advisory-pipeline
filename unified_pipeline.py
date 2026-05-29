@@ -68,7 +68,7 @@ def run_all_modules(dry_run: bool = False) -> dict:
     results = {}
 
     modules = _import_modules()
-    run_order = ["zia", "casb", "dspm", "zpa"]
+    run_order = ["zia", "casb", "zpa"]  # DSPM disabled — not licensed
 
     for name in run_order:
         if name not in modules:

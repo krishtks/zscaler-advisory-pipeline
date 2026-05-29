@@ -180,7 +180,9 @@ def enrich_with_claude(findings:list[dict]) -> list[dict]:
             f"Findings:\n{lines}"
         )
         try:
-            results=json.loads(_call_llm(prompt))
+            raw=_call_llm(prompt).strip()
+            raw=raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            results=json.loads(raw)
             rmap={(r.get("type",""),r.get("user","") or r.get("name","")):r for r in results}
         except Exception as e:
             logger.warning(f"ZPA LLM error: {e}"); rmap={}
